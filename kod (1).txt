@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Endless Runner 3D</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#000; }
+    #score {
+      position: absolute; top: 10px; left: 10px;
+      color: white; font-size: 20px; font-family: sans-serif;
+    }
+    #gameover {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: red; font-size: 40px; font-family: sans-serif;
+      display: none;
+    }
+    #restart {
+      position: absolute; top: 60%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: white; font-size: 20px; font-family: sans-serif;
+      background: #333; padding: 10px; cursor: pointer;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="score">Score: 0</div>
+<div id="gameover">Game Over!</div>
+<div id="restart">Restart</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+<script>
+  // === Temel sahne ayarları ===
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // Işık
+  const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+  scene.add(light);
+
+  // Yol (sonsuz gibi görünecek)
+  const roadGeometry = new THREE.BoxGeometry(10,0.1,1000);
+  const roadMaterial = new THREE.MeshPhongMaterial({color:0x333333});
+  const road = new THREE.Mesh(roadGeometry, roadMaterial);
+  road.position.z = -500;
+  scene.add(road);
+
+  // Oyuncu karakter (basit bir kutu)
+  const playerGeometry = new THREE.BoxGeometry(1,1,1);
+  const playerMaterial = new THREE.MeshPhongMaterial({color:0x00ff00});
+  const player = new THREE.Mesh(playerGeometry, playerMaterial);
+  player.position.y = 0.5;
+  scene.add(player);
+
+  camera.position.y = 2;
+  camera.position.z = 5;
+
+  // Engeller
+  let obstacles = [];
+  function createObstacle(zPos){
+    const geo = new THREE.BoxGeometry(1,1,1);
+    const mat = new THREE.MeshPhongMaterial({color:0xff0000});
+    const obs = new THREE.Mesh(geo, mat);
+    obs.position.set(Math.floor(Math.random()*3)-1,0.5,zPos);
+    scene.add(obs);
+    obstacles.push(obs);
+  }
+
+  // Skor
+  let score = 0;
+  let gameOver = false;
+
+  // Kontroller
+  let lane = 0; // -1 sol, 0 orta, 1 sağ
+  function moveLeft(){ if(lane>-1) lane--; }
+  function moveRight(){ if(lane<1) lane++; }
+  function jump(){
+    if(player.position.y<=0.5) velocityY = 0.15;
+  }
+
+  // Klavye
+  document.addEventListener('keydown', e=>{
+    if(e.key==="ArrowLeft") moveLeft();
+    if(e.key==="ArrowRight") moveRight();
+    if(e.key==="ArrowUp") jump();
+  });
+
+  // Mobil dokunmatik
+  document.addEventListener('touchstart', e=>{
+    const x = e.touches[0].clientX;
+    if(x < window.innerWidth/3) moveLeft();
+    else if(x > 2*window.innerWidth/3) moveRight();
+    else jump();
+  });
+
+  // Zıplama fiziği
+  let velocityY = 0;
+
+  // Oyun döngüsü
+  function animate(){
+    if(gameOver) return;
+    requestAnimationFrame(animate);
+
+    // Oyuncu lane'e göre hareket etsin
+    player.position.x += (lane - player.position.x)*0.2;
+
+    // Zıplama
+    player.position.y += velocityY;
+    velocityY -= 0.01;
+    if(player.position.y<0.5){ player.position.y=0.5; velocityY=0; }
+
+    // Engelleri hareket ettir
+    obstacles.forEach(obs=>{
+      obs.position.z += 0.2;
+      if(obs.position.z>5){
+        scene.remove(obs);
+      }
+      // Çarpışma kontrolü
+      if(Math.abs(player.position.x-obs.position.x)<0.9 &&
+         Math.abs(player.position.y-obs.position.y)<0.9 &&
+         obs.position.z>player.position.z-0.5 && obs.position.z<player.position.z+0.5){
+        endGame();
+      }
+    });
+    obstacles = obstacles.filter(obs=>obs.position.z<=5);
+
+    // Skor
+    score++;
+    document.getElementById("score").innerText = "Score: " + score;
+
+    // Yeni engeller
+    if(score%100===0){
+      createObstacle(-500);
+    }
+
+    renderer.render(scene,camera);
+  }
+
+  function endGame(){
+    gameOver = true;
+    document.getElementById("gameover").style.display="block";
+    document.getElementById("restart").style.display="block";
+  }
+
+  document.getElementById("restart").onclick = ()=>{
+    // Reset
+    obstacles.forEach(o=>scene.remove(o));
+    obstacles=[];
+    score=0;
+    lane=0;
+    player.position.set(0,0.5,0);
+    gameOver=false;
+    document.getElementById("gameover").style.display="none";
+    document.getElementById("restart").style.display="none";
+    animate();
+  };
+
+  // Başlat
+  animate();
+</script>
+</body>
+</html>
